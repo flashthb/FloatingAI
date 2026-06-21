@@ -66,7 +66,7 @@ class LauncherWindow(QWidget):
                 border: 1px solid #555555;
                 border-radius: 2px;
                 padding: 8px 12px;
-                font: 13px "Fira Code", "Cascadia Code", "Consolas", monospace;
+                font-size: 13px;
                 color: #e0e0e0;
                 selection-background-color: #404040;
                 outline: none;
@@ -85,15 +85,20 @@ class LauncherWindow(QWidget):
                 border: none;
                 border-top: 1px solid #2a2a2a;
                 padding: 8px 10px;
-                font: 13px "Fira Code", "Cascadia Code", "Consolas", monospace;
+                font-size: 13px;
                 color: #c0c0c8;
                 selection-background-color: #404040;
             }
         """)
 
-        font = QFont("Fira Code", 10)
-        font.setStyleStrategy(QFont.PreferAntialias)
-        self.setFont(font)
+    def update_font(self, font_name: str):
+        f = QFont(font_name, 13)
+        f.setStyleStrategy(QFont.PreferAntialias)
+        self.input.setFont(f)
+        f2 = QFont(font_name, 13)
+        f2.setStyleStrategy(QFont.PreferAntialias)
+        self.response.setFont(f2)
+        self.input.setFocus()
 
     def _apply_shadow(self):
         shadow = QGraphicsDropShadowEffect(self)

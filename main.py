@@ -7,6 +7,7 @@ from PySide6.QtGui import QIcon, QPixmap, QPainter, QFont, QColor, QPen, QBrush,
 from config import settings
 from hotkeys.listener import HotkeyListener
 from ui.launcher_window import LauncherWindow
+from ui.settings_window import SettingsWindow
 
 
 APP_NAME = "Flotante"
@@ -65,7 +66,10 @@ def main():
 
     app = QApplication(sys.argv)
     _load_local_fonts()
-    app.setFont(QFont("Fira Code", 10))
+    font_name = os.environ.get("APP_FONT", "Fira Code")
+    font = QFont(font_name, 10)
+    font.setStyleStrategy(QFont.PreferAntialias)
+    app.setFont(font)
     app.setQuitOnLastWindowClosed(False)
 
     icon = _make_icon()
@@ -86,7 +90,7 @@ def main():
         }
         QMenu::item {
             padding: 6px 24px 6px 12px;
-            font: 13px "Segoe UI", "Segoe UI Variable Display", sans-serif;
+            font-size: 13px; font-family: "Segoe UI", "Segoe UI Variable Display", sans-serif;
             color: #cccccc;
             border-radius: 4px;
         }
@@ -101,11 +105,15 @@ def main():
         }
     """)
 
-    abrir = menu.addAction("Abrir")
+    abrir = menu.addAction("Open")
+    config_action = menu.addAction("Settings")
     menu.addSeparator()
-    salir = menu.addAction("Salir")
+    salir = menu.addAction("Quit")
 
     abrir.triggered.connect(window.show_centered)
+    config_action.triggered.connect(
+        lambda: SettingsWindow(parent=window, app=app, launcher=window).exec()
+    )
     salir.triggered.connect(app.quit)
     tray.setContextMenu(menu)
     tray.activated.connect(
