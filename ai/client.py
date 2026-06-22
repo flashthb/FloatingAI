@@ -1,10 +1,7 @@
-"""Cliente que prueba backends de IA en orden:
-
-1. Groq (si GROQ_API_KEY configurada, gratuito y rápido)
-2. Simulador local (si no hay clave configurada)
-"""
+import os
 from typing import Optional
 from . import _util, groq_backend
+from .catalog import PROVIDERS, provider_default_model, provider_model_var
 from config import settings
 
 
@@ -23,11 +20,98 @@ def _postprocess(text: str, max_chars: int = settings.MAX_CHARACTERS) -> str:
 
 
 def get_short_answer(prompt: str, model: Optional[str] = None) -> str:
-    """Prueba Groq → Simulador."""
-    # 1 – Groq (gratuito, rápido)
-    result = groq_backend.get_short_answer_groq(prompt)
+    """Usa el proveedor activo o auto-fallback."""
+    active = os.getenv("ACTIVE_BACKEND") or "auto"
+
+    def _model_for(provider_key: str) -> str:
+        return model or os.getenv(provider_model_var(provider_key)) or provider_default_model(provider_key)
+
+    def _call_openai_like(base_url: str, api_key_env: str, model_id: str) -> Optional[str]:
+        api_key = os.getenv(api_key_env)
+        if not api_key:
+            return None
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=api_key, base_url=base_url)
+            resp = client.chat.completions.create(
+                model=model_id,
+                messages=[
+                    {"role": "system", "content": "Responde de forma muy breve y directa, máximo 3 líneas."},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=150,
+                temperature=0.3,
+            )
+            return resp.choices[0].message.content
+        except Exception:
+            return None
+
+    def _call_gemini(model_id: str) -> Optional[str]:
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return None
+        try:
+            import httpx
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent?key={api_key}"
+            payload = {
+                "contents": [
+                    {"role": "user", "parts": [{"text": f"Responde breve y directo: {prompt}"}]}
+                ],
+                "generationConfig": {"maxOutputTokens": 150, "temperature": 0.3},
+            }
+            resp = httpx.post(url, json=payload, timeout=60)
+            resp.raise_for_status()
+            data = resp.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+        except Exception:
+            return None
+
+    def _call_claude(model_id: str) -> Optional[str]:
+        api_key = os.getenv("CLAUDE_API_KEY")
+        if not api_key:
+            return None
+        try:
+            import httpx
+            url = "https://api.anthropic.com/v1/messages"
+            headers = {
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            }
+            payload = {
+                "model": model_id,
+                "max_tokens": 150,
+                "messages": [{"role": "user", "content": f"Responde breve y directo: {prompt}"}],
+            }
+            resp = httpx.post(url, headers=headers, json=payload, timeout=60)
+            resp.raise_for_status()
+            data = resp.json()
+            parts = data.get("content", [])
+            if parts:
+                return parts[0].get("text")
+            return None
+        except Exception:
+            return None
+
+    if active == "groq":
+        result = groq_backend.get_short_answer_groq(prompt, _model_for("groq"))
+        return _postprocess(result) if result is not None else _postprocess(_util.simulate_answer(prompt))
+
+    if active in PROVIDERS and active != "auto":
+        if active in ("openai", "github-copilot"):
+            result = _call_openai_like("https://api.openai.com/v1", "OPENAI_API_KEY", _model_for("openai"))
+            return _postprocess(result) if result is not None else _postprocess(_util.simulate_answer(prompt))
+        if active == "claude":
+            result = _call_claude(_model_for("claude"))
+            return _postprocess(result) if result is not None else _postprocess(_util.simulate_answer(prompt))
+        if active == "gemini":
+            result = _call_gemini(_model_for("gemini"))
+            return _postprocess(result) if result is not None else _postprocess(_util.simulate_answer(prompt))
+        return _postprocess(_util.simulate_answer(prompt))
+
+    # auto: intenta Groq y luego cae a local
+    result = groq_backend.get_short_answer_groq(prompt, _model_for("groq"))
     if result is not None:
         return _postprocess(result)
 
-    # 2 – Simulador local
     return _postprocess(_util.simulate_answer(prompt))

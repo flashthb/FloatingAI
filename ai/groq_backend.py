@@ -4,9 +4,10 @@ Requiere variable de entorno GROQ_API_KEY con el token de
 https://console.groq.com
 """
 import os
+from ai.catalog import provider_default_model
 
 
-def get_short_answer_groq(prompt: str) -> str | None:
+def get_short_answer_groq(prompt: str, model: str | None = None) -> str | None:
     """Llama a Groq. Devuelve None si no hay clave."""
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
@@ -23,7 +24,7 @@ def get_short_answer_groq(prompt: str) -> str | None:
     )
     try:
         resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=model or os.getenv("GROQ_MODEL") or provider_default_model("groq"),
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": prompt},

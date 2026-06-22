@@ -68,7 +68,7 @@ def main():
     _load_local_fonts()
     font_name = os.environ.get("APP_FONT", "Fira Code")
     font = QFont(font_name, 10)
-    font.setStyleStrategy(QFont.PreferAntialias)
+    font.setHintingPreference(QFont.PreferFullHinting)
     app.setFont(font)
     app.setQuitOnLastWindowClosed(False)
 

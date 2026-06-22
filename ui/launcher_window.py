@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QThread
 from PySide6.QtGui import QKeyEvent, QFont
 from config import settings
 from ai.worker import AIWorker
-from commands import handler as cmd
+from ai.catalog import any_key_configured
 
 
 INNER_MARGIN = 10
@@ -67,6 +67,7 @@ class LauncherWindow(QWidget):
                 border-radius: 2px;
                 padding: 8px 12px;
                 font-size: 13px;
+                line-height: 16px;
                 color: #e0e0e0;
                 selection-background-color: #404040;
                 outline: none;
@@ -86,6 +87,7 @@ class LauncherWindow(QWidget):
                 border-top: 1px solid #2a2a2a;
                 padding: 8px 10px;
                 font-size: 13px;
+                line-height: 16px;
                 color: #c0c0c8;
                 selection-background-color: #404040;
             }
@@ -93,10 +95,10 @@ class LauncherWindow(QWidget):
 
     def update_font(self, font_name: str):
         f = QFont(font_name, 13)
-        f.setStyleStrategy(QFont.PreferAntialias)
+        f.setHintingPreference(QFont.PreferFullHinting)
         self.input.setFont(f)
         f2 = QFont(font_name, 13)
-        f2.setStyleStrategy(QFont.PreferAntialias)
+        f2.setHintingPreference(QFont.PreferFullHinting)
         self.response.setFont(f2)
         self.input.setFocus()
 
@@ -157,19 +159,10 @@ class LauncherWindow(QWidget):
             return
         self.input.clear()
 
-        # Comandos internos
-        if text.startswith("/"):
-            result = cmd.execute(text, self._app)
-            self.response.setPlainText(result)
-            QTimer.singleShot(0, self.input.setFocus)
-            return
-
-        # Sin claves configuradas
-        if not cmd.any_key_configured():
+        if not any_key_configured():
             self.response.setPlainText(
                 "No hay claves de API configuradas.\n"
-                "Usa /key <backend> <clave> para añadir una.\n"
-                "Ej: /key groq gsk_..."
+                "Abre Settings → Añade una clave de API en la sección API."
             )
             QTimer.singleShot(0, self.input.setFocus)
             return

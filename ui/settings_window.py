@@ -2,12 +2,15 @@ import os
 from pathlib import Path
 from PySide6.QtWidgets import (
     QDialog, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QComboBox, QLineEdit, QStackedWidget,
+    QPushButton, QComboBox, QLineEdit, QStackedWidget, QScrollArea,
     QFrame, QApplication,
 )
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from PySide6.QtGui import QFont, QFontDatabase
-from commands import handler as cmd
+from ai.catalog import (
+    PROVIDERS, BACKENDS,
+    provider_default_model, provider_models, provider_model_var,
+)
 
 ENV_PATH = Path(__file__).resolve().parent.parent / '.env'
 
@@ -88,13 +91,20 @@ class SettingsWindow(QDialog):
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setFixedSize(580, 380)
+        self.setFixedSize(760, 560)
 
         self._build_ui()
         self._apply_styles()
         self._load_state()
         self.font_combo.currentTextChanged.connect(self._on_font_changed)
-        self.active_combo.currentIndexChanged.connect(self._on_active_backend_changed)
+        self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
+        self.model_combo.currentIndexChanged.connect(self._on_model_changed)
+        for combo in (self.font_combo, self.provider_combo, self.model_combo):
+            view = combo.view()
+            view.setAttribute(Qt.WA_TranslucentBackground, False)
+            view.window().setAttribute(Qt.WA_TranslucentBackground, False)
+            combo.activated.connect(lambda _, c=combo: QTimer.singleShot(0, c.hidePopup))
+            view.clicked.connect(lambda _, c=combo: QTimer.singleShot(0, c.hidePopup))
 
     def _build_ui(self):
         self.container = QFrame()
@@ -208,21 +218,54 @@ class SettingsWindow(QDialog):
     def _build_api_page(self) -> QWidget:
         page = QWidget()
         page.setObjectName("settingsPage")
-        layout = QVBoxLayout(page)
+
+        outer = QVBoxLayout(page)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setObjectName("settingsScroll")
+
+        content = QWidget()
+        content.setObjectName("settingsPage")
+        layout = QVBoxLayout(content)
         layout.setContentsMargins(28, 28, 28, 28)
-        layout.setSpacing(12)
+        layout.setSpacing(16)
 
-        # active backend
-        active_label = QLabel("Primary Backend")
-        active_label.setObjectName("sectionTitle")
-        layout.addWidget(active_label)
+        selector_card = QFrame()
+        selector_card.setObjectName("apiSelectorCard")
+        selector_layout = QVBoxLayout(selector_card)
+        selector_layout.setContentsMargins(18, 18, 18, 18)
+        selector_layout.setSpacing(12)
 
-        self.active_combo = QComboBox()
-        self.active_combo.setObjectName("activeBackendCombo")
-        self.active_combo.addItem("Auto (first available)", "auto")
-        for key, info in cmd.BACKENDS.items():
-            self.active_combo.addItem(info["label"], key)
-        layout.addWidget(self.active_combo)
+        provider_label = QLabel("Provider")
+        provider_label.setObjectName("sectionTitle")
+        selector_layout.addWidget(provider_label)
+
+        self.provider_combo = QComboBox()
+        self.provider_combo.setObjectName("providerCombo")
+        self.provider_combo.setMinimumHeight(36)
+        self.provider_combo.setMinimumWidth(380)
+        selector_layout.addWidget(self.provider_combo)
+
+        model_label = QLabel("Submodel")
+        model_label.setObjectName("sectionTitle")
+        selector_layout.addWidget(model_label)
+
+        self.model_combo = QComboBox()
+        self.model_combo.setObjectName("modelCombo")
+        self.model_combo.setMinimumHeight(36)
+        self.model_combo.setMinimumWidth(380)
+        selector_layout.addWidget(self.model_combo)
+
+        api_hint = QLabel("Only providers with a saved key are shown. Choose a provider first, then its model.")
+        api_hint.setObjectName("hintLabel")
+        api_hint.setWordWrap(True)
+        selector_layout.addWidget(api_hint)
+
+        layout.addWidget(selector_card)
 
         # separator
         sep = QFrame()
@@ -235,20 +278,27 @@ class SettingsWindow(QDialog):
         keys_label.setObjectName("sectionTitle")
         layout.addWidget(keys_label)
 
+        keys_subtitle = QLabel("Save a key to unlock the provider and its submodels.")
+        keys_subtitle.setObjectName("hintLabel")
+        keys_subtitle.setWordWrap(True)
+        layout.addWidget(keys_subtitle)
+
         self._key_widgets = {}
-        for key, info in cmd.BACKENDS.items():
+        for key, info in BACKENDS.items():
             row = self._key_row(key, info)
             self._key_widgets[key] = row
             layout.addWidget(row["widget"])
 
         layout.addStretch()
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
         return page
 
     def _key_row(self, backend_key: str, info: dict) -> dict:
         widget = QWidget()
         layout = QHBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(10)
 
         dot = QLabel("●")
         dot.setObjectName("statusDot")
@@ -256,20 +306,23 @@ class SettingsWindow(QDialog):
 
         name = QLabel(info["label"])
         name.setObjectName("keyName")
-        name.setFixedWidth(80)
+        name.setFixedWidth(96)
 
         inp = QLineEdit()
         inp.setObjectName("keyInput")
         inp.setPlaceholderText("Paste your API key...")
         inp.setEchoMode(QLineEdit.Password)
+        inp.setMinimumHeight(30)
 
         save_btn = QPushButton("Save")
         save_btn.setObjectName("keySaveBtn")
         save_btn.setCursor(Qt.PointingHandCursor)
+        save_btn.setMinimumHeight(30)
 
         remove_btn = QPushButton("Remove")
         remove_btn.setObjectName("keyRemoveBtn")
         remove_btn.setCursor(Qt.PointingHandCursor)
+        remove_btn.setMinimumHeight(30)
 
         status_label = QLabel("")
         status_label.setObjectName("keyStatusLabel")
@@ -322,7 +375,7 @@ class SettingsWindow(QDialog):
 
         # force antialiasing on labels
         f = name.font()
-        f.setStyleStrategy(QFont.PreferAntialias)
+        f.setHintingPreference(QFont.PreferFullHinting)
         name.setFont(f)
 
         return {
@@ -355,6 +408,7 @@ class SettingsWindow(QDialog):
             inp.setEchoMode(QLineEdit.Password)
             label.setText("✓")
             label.setStyleSheet("color: #4ade80;")
+            self._load_state()
         else:
             label.setText("✗")
             label.setStyleSheet("color: #ff5555;")
@@ -375,30 +429,83 @@ class SettingsWindow(QDialog):
         _write_env(env)
         os.environ["APP_FONT"] = font_name
         f = QFont(font_name, 10)
-        f.setStyleStrategy(QFont.PreferAntialias)
+        f.setHintingPreference(QFont.PreferFullHinting)
         self._app.setFont(f)
         if self._launcher:
             self._launcher.update_font(font_name)
         # re-apply own stylesheet so settings window uses the new font too
         self._apply_styles(font_name)
 
-    def _on_active_backend_changed(self, idx: int):
-        backend = self.active_combo.currentData()
+    def _on_provider_changed(self, idx: int):
+        provider = self.provider_combo.currentData()
         env = _read_env()
-        if backend == "auto":
+        if provider == "auto":
             env.pop("ACTIVE_BACKEND", None)
             os.environ.pop("ACTIVE_BACKEND", None)
         else:
-            env["ACTIVE_BACKEND"] = backend
-            os.environ["ACTIVE_BACKEND"] = backend
+            env["ACTIVE_BACKEND"] = provider
+            os.environ["ACTIVE_BACKEND"] = provider
         _write_env(env)
+        self._populate_model_combo(provider, env)
+        QTimer.singleShot(0, self.provider_combo.hidePopup)
+
+    def _on_model_changed(self, idx: int):
+        provider = self.provider_combo.currentData()
+        if not provider or provider == "auto":
+            return
+        model_id = self.model_combo.currentData()
+        if not model_id:
+            return
+        env = _read_env()
+        env[provider_model_var(provider)] = model_id
+        _write_env(env)
+        os.environ[provider_model_var(provider)] = model_id
+        QTimer.singleShot(0, self.model_combo.hidePopup)
 
     # ── load ─────────────────────────────────────────────────
+
+    def _populate_provider_combo(self, env: dict[str, str]) -> None:
+        self.provider_combo.blockSignals(True)
+        self.provider_combo.clear()
+        self.provider_combo.addItem("Auto (first available)", "auto")
+        for key, info in PROVIDERS.items():
+            if env.get(info["key_var"]):
+                self.provider_combo.addItem(info["label"], key)
+
+        preferred = env.get("ACTIVE_BACKEND", "auto")
+        idx = self.provider_combo.findData(preferred)
+        if idx < 0:
+            idx = 0
+        self.provider_combo.setCurrentIndex(idx)
+        self.provider_combo.blockSignals(False)
+
+    def _populate_model_combo(self, provider: str, env: dict[str, str]) -> None:
+        self.model_combo.blockSignals(True)
+        self.model_combo.clear()
+
+        if not provider or provider == "auto":
+            self.model_combo.addItem("Choose a provider first", "")
+            self.model_combo.setEnabled(False)
+            self.model_combo.blockSignals(False)
+            return
+
+        models = provider_models(provider)
+        for model_id, label in models:
+            self.model_combo.addItem(label, model_id)
+
+        current = env.get(provider_model_var(provider)) or provider_default_model(provider)
+        idx = self.model_combo.findData(current)
+        if idx < 0:
+            self.model_combo.addItem(current, current)
+            idx = self.model_combo.count() - 1
+
+        self.model_combo.setCurrentIndex(idx)
+        self.model_combo.setEnabled(True)
+        self.model_combo.blockSignals(False)
 
     def _load_state(self):
         # block signals so setCurrentIndex doesn't trigger _on_font_changed
         self.font_combo.blockSignals(True)
-        self.active_combo.blockSignals(True)
 
         env = _read_env()
         loaded = env.get("APP_FONT") or "Fira Code"
@@ -406,13 +513,11 @@ class SettingsWindow(QDialog):
         if idx >= 0:
             self.font_combo.setCurrentIndex(idx)
 
-        active = env.get("ACTIVE_BACKEND", "auto")
-        idx = self.active_combo.findData(active)
-        if idx >= 0:
-            self.active_combo.setCurrentIndex(idx)
+        self._populate_provider_combo(env)
+        provider = self.provider_combo.currentData()
+        self._populate_model_combo(provider, env)
 
         self.font_combo.blockSignals(False)
-        self.active_combo.blockSignals(False)
 
     # ── styles ───────────────────────────────────────────────
 
@@ -476,11 +581,16 @@ class SettingsWindow(QDialog):
             #settingsPage {{
                 background: #161618;
             }}
+            #apiSelectorCard {{
+                background: #18181b;
+                border: 1px solid #2a2a2a;
+                border-radius: 4px;
+            }}
             .sectionTitle {{
                 font-size: 13px; font-family: {font_stack};
                 color: #aaaaaa;
             }}
-            #fontCombo, #activeBackendCombo {{
+            #fontCombo, #providerCombo, #modelCombo {{
                 background: #1a1a1c;
                 border: 1px solid #333333;
                 border-radius: 2px;
@@ -489,14 +599,14 @@ class SettingsWindow(QDialog):
                 color: #e0e0e0;
                 selection-background-color: #404040;
             }}
-            #fontCombo:focus, #activeBackendCombo:focus {{
+            #fontCombo:focus, #providerCombo:focus, #modelCombo:focus {{
                 border: 1px solid #ffffff;
             }}
-            #fontCombo::drop-down, #activeBackendCombo::drop-down {{
+            #fontCombo::drop-down, #providerCombo::drop-down, #modelCombo::drop-down {{
                 border: none;
                 width: 20px;
             }}
-            #fontCombo QAbstractItemView, #activeBackendCombo QAbstractItemView {{
+            #fontCombo QAbstractItemView, #providerCombo QAbstractItemView, #modelCombo QAbstractItemView {{
                 background: #111111;
                 border: 1px solid #242424;
                 color: #cccccc;
@@ -511,7 +621,7 @@ class SettingsWindow(QDialog):
                 background: #1a1a1c;
                 border: 1px solid #333333;
                 border-radius: 2px;
-                padding: 5px 8px;
+                padding: 6px 10px;
                 font-size: 12px; font-family: {font_stack};
                 color: #e0e0e0;
                 selection-background-color: #404040;
@@ -523,7 +633,7 @@ class SettingsWindow(QDialog):
                 background: #1e1e1e;
                 border: 1px solid #333333;
                 border-radius: 2px;
-                padding: 5px 14px;
+                padding: 6px 14px;
                 font-size: 12px; font-family: {font_stack};
                 color: #cccccc;
             }}
@@ -536,7 +646,7 @@ class SettingsWindow(QDialog):
                 background: transparent;
                 border: 1px solid #333333;
                 border-radius: 2px;
-                padding: 5px 14px;
+                padding: 6px 14px;
                 font-size: 12px; font-family: {font_stack};
                 color: #aa5555;
             }}
