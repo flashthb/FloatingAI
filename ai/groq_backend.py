@@ -7,7 +7,7 @@ import os
 from ai.catalog import provider_default_model
 
 
-def get_short_answer_groq(prompt: str, model: str | None = None) -> str | None:
+def get_short_answer_groq(prompt: str, model: str | None = None, history: list[dict] | None = None) -> str | None:
     """Llama a Groq. Devuelve None si no hay clave."""
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
@@ -23,12 +23,16 @@ def get_short_answer_groq(prompt: str, model: str | None = None) -> str | None:
         "Responde en un máximo de 3 líneas, sin explicaciones adicionales."
     )
     try:
-        resp = client.chat.completions.create(
-            model=model or os.getenv("GROQ_MODEL") or provider_default_model("groq"),
-            messages=[
+        if history:
+            messages = [{"role": "system", "content": system}] + history
+        else:
+            messages = [
                 {"role": "system", "content": system},
                 {"role": "user", "content": prompt},
-            ],
+            ]
+        resp = client.chat.completions.create(
+            model=model or os.getenv("GROQ_MODEL") or provider_default_model("groq"),
+            messages=messages,
             max_tokens=150,
             temperature=0.3,
         )

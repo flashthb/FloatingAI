@@ -19,12 +19,16 @@ def _postprocess(text: str, max_chars: int = settings.MAX_CHARACTERS) -> str:
     return result
 
 
-def get_short_answer(prompt: str, model: Optional[str] = None) -> str:
+def get_short_answer(prompt: str, model: Optional[str] = None, history: Optional[list[dict]] = None) -> str:
     """Usa el proveedor activo o auto-fallback."""
     active = os.getenv("ACTIVE_BACKEND") or "auto"
 
     def _model_for(provider_key: str) -> str:
         return model or os.getenv(provider_model_var(provider_key)) or provider_default_model(provider_key)
+
+    def _build_messages(history: list[dict]) -> list[dict]:
+        system = {"role": "system", "content": "Responde de forma muy breve y directa, máximo 3 líneas."}
+        return [system] + history
 
     def _call_openai_like(base_url: str, api_key_env: str, model_id: str) -> Optional[str]:
         api_key = os.getenv(api_key_env)
@@ -33,12 +37,13 @@ def get_short_answer(prompt: str, model: Optional[str] = None) -> str:
         try:
             from openai import OpenAI
             client = OpenAI(api_key=api_key, base_url=base_url)
+            messages = _build_messages(history) if history else [
+                {"role": "system", "content": "Responde de forma muy breve y directa, máximo 3 líneas."},
+                {"role": "user", "content": prompt},
+            ]
             resp = client.chat.completions.create(
                 model=model_id,
-                messages=[
-                    {"role": "system", "content": "Responde de forma muy breve y directa, máximo 3 líneas."},
-                    {"role": "user", "content": prompt},
-                ],
+                messages=messages,
                 max_tokens=150,
                 temperature=0.3,
             )
@@ -53,10 +58,12 @@ def get_short_answer(prompt: str, model: Optional[str] = None) -> str:
         try:
             import httpx
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent?key={api_key}"
+            if history:
+                contents = [{"role": m["role"], "parts": [{"text": m["content"]}]} for m in history]
+            else:
+                contents = [{"role": "user", "parts": [{"text": f"Responde breve y directo: {prompt}"}]}]
             payload = {
-                "contents": [
-                    {"role": "user", "parts": [{"text": f"Responde breve y directo: {prompt}"}]}
-                ],
+                "contents": contents,
                 "generationConfig": {"maxOutputTokens": 150, "temperature": 0.3},
             }
             resp = httpx.post(url, json=payload, timeout=60)
@@ -78,10 +85,14 @@ def get_short_answer(prompt: str, model: Optional[str] = None) -> str:
                 "anthropic-version": "2023-06-01",
                 "content-type": "application/json",
             }
+            if history:
+                messages = [{"role": m["role"], "content": m["content"]} for m in history]
+            else:
+                messages = [{"role": "user", "content": f"Responde breve y directo: {prompt}"}]
             payload = {
                 "model": model_id,
                 "max_tokens": 150,
-                "messages": [{"role": "user", "content": f"Responde breve y directo: {prompt}"}],
+                "messages": messages,
             }
             resp = httpx.post(url, headers=headers, json=payload, timeout=60)
             resp.raise_for_status()
@@ -94,7 +105,7 @@ def get_short_answer(prompt: str, model: Optional[str] = None) -> str:
             return None
 
     if active == "groq":
-        result = groq_backend.get_short_answer_groq(prompt, _model_for("groq"))
+        result = groq_backend.get_short_answer_groq(prompt, _model_for("groq"), history=history)
         return _postprocess(result) if result is not None else _postprocess(_util.simulate_answer(prompt))
 
     if active in PROVIDERS and active != "auto":
@@ -110,7 +121,7 @@ def get_short_answer(prompt: str, model: Optional[str] = None) -> str:
         return _postprocess(_util.simulate_answer(prompt))
 
     # auto: intenta Groq y luego cae a local
-    result = groq_backend.get_short_answer_groq(prompt, _model_for("groq"))
+    result = groq_backend.get_short_answer_groq(prompt, _model_for("groq"), history=history)
     if result is not None:
         return _postprocess(result)
 

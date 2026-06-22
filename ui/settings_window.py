@@ -1,9 +1,11 @@
 import os
+import sys
+import winreg
 from pathlib import Path
 from PySide6.QtWidgets import (
     QDialog, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QComboBox, QLineEdit, QStackedWidget, QScrollArea,
-    QFrame, QApplication,
+    QFrame, QApplication, QCheckBox,
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from PySide6.QtGui import QFont, QFontDatabase
@@ -13,6 +15,41 @@ from ai.catalog import (
 )
 
 ENV_PATH = Path(__file__).resolve().parent.parent / '.env'
+_AUTOSTART_REG_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+_AUTOSTART_REG_NAME = "Flotante"
+
+
+def _autostart_command() -> str:
+    python = Path(sys.executable)
+    pythonw = python.parent / "pythonw.exe"
+    if pythonw.exists():
+        python = pythonw
+    script = str(Path(__file__).resolve().parent.parent / "main.py")
+    return f'"{python}" "{script}"'
+
+
+def _autostart_is_enabled() -> bool:
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _AUTOSTART_REG_KEY, 0, winreg.KEY_READ)
+        winreg.QueryValueEx(key, _AUTOSTART_REG_NAME)
+        winreg.CloseKey(key)
+        return True
+    except FileNotFoundError:
+        return False
+
+
+def _autostart_set(enabled: bool) -> None:
+    if enabled:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _AUTOSTART_REG_KEY, 0, winreg.KEY_SET_VALUE)
+        winreg.SetValueEx(key, _AUTOSTART_REG_NAME, 0, winreg.REG_SZ, _autostart_command())
+        winreg.CloseKey(key)
+    else:
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _AUTOSTART_REG_KEY, 0, winreg.KEY_SET_VALUE)
+            winreg.DeleteValue(key, _AUTOSTART_REG_NAME)
+            winreg.CloseKey(key)
+        except FileNotFoundError:
+            pass
 
 
 def _read_env() -> dict[str, str]:
@@ -209,6 +246,22 @@ class SettingsWindow(QDialog):
         info = QLabel("Changes apply immediately to the main window.")
         info.setObjectName("hintLabel")
         layout.addWidget(info)
+
+        layout.addSpacing(12)
+
+        startup_title = QLabel("Startup")
+        startup_title.setObjectName("sectionTitle")
+        layout.addWidget(startup_title)
+
+        self.autostart_check = QCheckBox("Open on system startup")
+        self.autostart_check.setObjectName("autostartCheck")
+        self.autostart_check.setChecked(_autostart_is_enabled())
+        self.autostart_check.toggled.connect(self._on_autostart_toggled)
+        layout.addWidget(self.autostart_check)
+
+        startup_hint = QLabel("Adds Flotante to Windows startup via registry.")
+        startup_hint.setObjectName("hintLabel")
+        layout.addWidget(startup_hint)
 
         layout.addStretch()
         return page
@@ -462,6 +515,9 @@ class SettingsWindow(QDialog):
         os.environ[provider_model_var(provider)] = model_id
         QTimer.singleShot(0, self.model_combo.hidePopup)
 
+    def _on_autostart_toggled(self, checked: bool):
+        _autostart_set(checked)
+
     # ── load ─────────────────────────────────────────────────
 
     def _populate_provider_combo(self, env: dict[str, str]) -> None:
@@ -658,6 +714,22 @@ class SettingsWindow(QDialog):
             #hintLabel {{
                 font-size: 11px; font-family: {font_stack};
                 color: #555555;
+            }}
+            #autostartCheck {{
+                font-size: 13px; font-family: {font_stack};
+                color: #cccccc;
+                spacing: 8px;
+            }}
+            #autostartCheck::indicator {{
+                width: 16px;
+                height: 16px;
+                border: 1px solid #555555;
+                border-radius: 3px;
+                background: #1a1a1c;
+            }}
+            #autostartCheck::indicator:checked {{
+                background: #4ade80;
+                border-color: #4ade80;
             }}
         """)
         for w in self.findChildren(QLabel):

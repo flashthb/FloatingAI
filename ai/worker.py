@@ -13,14 +13,15 @@ class AIWorker(QRunnable):
     Emite `finished` con la respuesta o `error` con el texto del error.
     """
 
-    def __init__(self, prompt: str):
+    def __init__(self, prompt: str, history: list[dict] | None = None):
         super().__init__()
         self.prompt = prompt
+        self.history = history or []
         self.signals = WorkerSignals()
 
     def run(self):
         try:
-            answer = get_short_answer(self.prompt)
+            answer = get_short_answer(self.prompt, history=self.history)
             self.signals.finished.emit(answer)
         except Exception as e:
             self.signals.error.emit(str(e))

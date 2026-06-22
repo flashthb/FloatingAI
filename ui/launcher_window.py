@@ -27,6 +27,7 @@ class LauncherWindow(QWidget):
         self.threadpool = QThreadPool.globalInstance()
         self._waiting = False
         self._fade_anim = None
+        self._history: list[dict] = []
 
         self._build_ui()
         self._apply_styles()
@@ -142,6 +143,7 @@ class LauncherWindow(QWidget):
     def _really_hide(self):
         self.input.clear()
         self.response.clear()
+        self._history.clear()
         self.hide()
         self.setWindowOpacity(1.0)
 
@@ -160,6 +162,7 @@ class LauncherWindow(QWidget):
         self.input.clear()
 
         if not any_key_configured():
+            self._history.pop()
             self.response.setPlainText(
                 "No hay claves de API configuradas.\n"
                 "Abre Settings → Añade una clave de API en la sección API."
@@ -170,13 +173,15 @@ class LauncherWindow(QWidget):
         self._set_waiting(True)
         self.response.setPlainText("...")
 
-        worker = AIWorker(text)
+        self._history.append({"role": "user", "content": text})
+        worker = AIWorker(text, list(self._history))
         worker.signals.finished.connect(self._on_answer)
         worker.signals.error.connect(self._on_error)
         self.threadpool.start(worker)
 
     def _on_answer(self, text: str):
         self._set_waiting(False)
+        self._history.append({"role": "assistant", "content": text})
         self.response.setPlainText(text)
         QTimer.singleShot(0, self.input.setFocus)
 
