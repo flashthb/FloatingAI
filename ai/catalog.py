@@ -89,16 +89,28 @@ def model_label(provider_key: str, model_id: str) -> str:
 # ── shared helpers for key-state checks ───────────────────────────
 
 import os
+import sys
 from pathlib import Path
 
-_CATALOG_ENV_PATH = Path(__file__).resolve().parent.parent / '.env'
+
+def _catalog_env_path() -> Path:
+    if getattr(sys, 'frozen', False):
+        p = Path(os.environ.get("APPDATA", Path.home())) / "Flotante" / ".env"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        if not p.exists():
+            bundled = Path(sys._MEIPASS) / '.env'
+            if bundled.exists():
+                p.write_text(bundled.read_text(encoding="utf-8"), encoding="utf-8")
+        return p
+    return Path(__file__).resolve().parent.parent / '.env'
 
 
 def _catalog_read_env() -> dict[str, str]:
-    if not _CATALOG_ENV_PATH.exists():
+    env = _catalog_env_path()
+    if not env.exists():
         return {}
     result = {}
-    for line in _CATALOG_ENV_PATH.read_text(encoding="utf-8").splitlines():
+    for line in env.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue

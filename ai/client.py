@@ -1,8 +1,30 @@
 import os
 from typing import Optional
+from openai import OpenAI
+import httpx
 from . import _util, groq_backend
 from .catalog import PROVIDERS, provider_default_model, provider_model_var
 from config import settings
+
+
+_openai_clients: dict[str, OpenAI] = {}
+_httpx_clients: dict[str, httpx.Client] = {}
+
+
+def _get_openai_client(api_key: str, base_url: str) -> OpenAI | None:
+    cache_key = f"{api_key}::{base_url}"
+    if cache_key not in _openai_clients:
+        try:
+            _openai_clients[cache_key] = OpenAI(api_key=api_key, base_url=base_url)
+        except Exception:
+            return None
+    return _openai_clients[cache_key]
+
+
+def _get_httpx_client(base_url: str) -> httpx.Client:
+    if base_url not in _httpx_clients:
+        _httpx_clients[base_url] = httpx.Client(timeout=60)
+    return _httpx_clients[base_url]
 
 
 def _postprocess(text: str, max_chars: int = settings.MAX_CHARACTERS) -> str:
@@ -34,9 +56,10 @@ def get_short_answer(prompt: str, model: Optional[str] = None, history: Optional
         api_key = os.getenv(api_key_env)
         if not api_key:
             return None
+        client = _get_openai_client(api_key, base_url)
+        if client is None:
+            return None
         try:
-            from openai import OpenAI
-            client = OpenAI(api_key=api_key, base_url=base_url)
             messages = _build_messages(history) if history else [
                 {"role": "system", "content": "Responde de forma muy breve y directa, máximo 3 líneas."},
                 {"role": "user", "content": prompt},
@@ -56,7 +79,7 @@ def get_short_answer(prompt: str, model: Optional[str] = None, history: Optional
         if not api_key:
             return None
         try:
-            import httpx
+            client = _get_httpx_client("https://generativelanguage.googleapis.com")
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent?key={api_key}"
             if history:
                 contents = [{"role": m["role"], "parts": [{"text": m["content"]}]} for m in history]
@@ -66,7 +89,7 @@ def get_short_answer(prompt: str, model: Optional[str] = None, history: Optional
                 "contents": contents,
                 "generationConfig": {"maxOutputTokens": 150, "temperature": 0.3},
             }
-            resp = httpx.post(url, json=payload, timeout=60)
+            resp = client.post(url, json=payload)
             resp.raise_for_status()
             data = resp.json()
             return data["candidates"][0]["content"]["parts"][0]["text"]
@@ -78,7 +101,7 @@ def get_short_answer(prompt: str, model: Optional[str] = None, history: Optional
         if not api_key:
             return None
         try:
-            import httpx
+            client = _get_httpx_client("https://api.anthropic.com")
             url = "https://api.anthropic.com/v1/messages"
             headers = {
                 "x-api-key": api_key,
@@ -94,7 +117,7 @@ def get_short_answer(prompt: str, model: Optional[str] = None, history: Optional
                 "max_tokens": 150,
                 "messages": messages,
             }
-            resp = httpx.post(url, headers=headers, json=payload, timeout=60)
+            resp = client.post(url, headers=headers, json=payload)
             resp.raise_for_status()
             data = resp.json()
             parts = data.get("content", [])

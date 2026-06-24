@@ -1,6 +1,7 @@
 import os
 import sys
 import signal
+import tempfile
 from pathlib import Path
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QFont, QColor, QPen, QBrush, QPainterPath, QFontDatabase
@@ -11,10 +12,62 @@ from ui.settings_window import SettingsWindow
 
 
 APP_NAME = "Flotante"
+_lock_file = None
+
+
+def _acquire_lock() -> bool:
+    global _lock_file
+    lock_path = Path(tempfile.gettempdir()) / "Flotante.lock"
+    def _process_exists(pid: int) -> bool:
+        try:
+            os.kill(pid, 0)
+            return True
+        except (OSError, PermissionError):
+            return False
+    if lock_path.exists():
+        try:
+            existing_pid = int(lock_path.read_text().strip())
+            if _process_exists(existing_pid):
+                return False
+        except (ValueError, OSError):
+            pass
+    lock_path.write_text(str(os.getpid()))
+    _lock_file = lock_path
+    return True
+
+
+def _release_lock():
+    global _lock_file
+    if _lock_file and _lock_file.exists():
+        try:
+            pid = int(_lock_file.read_text().strip())
+            if pid == os.getpid():
+                _lock_file.unlink(missing_ok=True)
+        except (ValueError, OSError):
+            _lock_file.unlink(missing_ok=True)
+    _lock_file = None
+
+
+def _resource_path(relative: str) -> Path:
+    if getattr(sys, 'frozen', False):
+        return Path(sys._MEIPASS) / relative
+    return Path(__file__).parent / relative
+
+
+def _env_file() -> Path:
+    if getattr(sys, 'frozen', False):
+        p = Path(os.environ.get("APPDATA", Path.home())) / "Flotante" / ".env"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        if not p.exists():
+            bundled = _resource_path('.env')
+            if bundled.exists():
+                p.write_text(bundled.read_text(encoding="utf-8"), encoding="utf-8")
+        return p
+    return _resource_path('.env')
 
 
 def _load_env():
-    env_path = Path(__file__).parent / '.env'
+    env_path = _env_file()
     if not env_path.exists():
         return
     for line in env_path.read_text(encoding='utf-8').splitlines():
@@ -55,18 +108,22 @@ def _make_icon() -> QIcon:
 
 
 def _load_local_fonts():
-    fonts_dir = Path(__file__).parent / "assets" / "fonts"
+    fonts_dir = _resource_path("assets") / "fonts"
     for path in fonts_dir.glob("*.ttf"):
         QFontDatabase.addApplicationFont(str(path))
 
 
 def main():
+    if not _acquire_lock():
+        sys.exit(0)
+
     _load_env()
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
     app = QApplication(sys.argv)
+    app.aboutToQuit.connect(_release_lock)
     _load_local_fonts()
-    font_name = os.environ.get("APP_FONT", "Fira Code")
+    font_name = os.environ.get("APP_FONT", "IBM Plex Mono")
     font = QFont(font_name, 10)
     font.setHintingPreference(QFont.PreferFullHinting)
     app.setFont(font)

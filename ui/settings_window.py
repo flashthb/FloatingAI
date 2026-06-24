@@ -14,12 +14,26 @@ from ai.catalog import (
     provider_default_model, provider_models, provider_model_var,
 )
 
-ENV_PATH = Path(__file__).resolve().parent.parent / '.env'
+ENV_PATH_HOME = Path(os.environ.get("APPDATA", Path.home())) / "Flotante" / ".env"
+
+
+def _env_path() -> Path:
+    if getattr(sys, 'frozen', False):
+        ENV_PATH_HOME.parent.mkdir(parents=True, exist_ok=True)
+        if not ENV_PATH_HOME.exists():
+            bundled = Path(sys._MEIPASS) / '.env'
+            if bundled.exists():
+                ENV_PATH_HOME.write_text(bundled.read_text(encoding="utf-8"), encoding="utf-8")
+        return ENV_PATH_HOME
+    return Path(__file__).resolve().parent.parent / '.env'
+
 _AUTOSTART_REG_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 _AUTOSTART_REG_NAME = "Flotante"
 
 
 def _autostart_command() -> str:
+    if getattr(sys, 'frozen', False):
+        return f'"{sys.executable}"'
     python = Path(sys.executable)
     pythonw = python.parent / "pythonw.exe"
     if pythonw.exists():
@@ -53,10 +67,11 @@ def _autostart_set(enabled: bool) -> None:
 
 
 def _read_env() -> dict[str, str]:
-    if not ENV_PATH.exists():
+    env = _env_path()
+    if not env.exists():
         return {}
     result = {}
-    for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
+    for line in env.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -66,15 +81,16 @@ def _read_env() -> dict[str, str]:
 
 
 def _write_env(data: dict[str, str]) -> None:
+    env = _env_path()
     lines = [f"{k}={v}" for k, v in data.items() if v]
-    ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    env.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 PREFERRED_FONTS = [
+    "IBM Plex Mono",
     "Fira Code",
     "Cascadia Code",
     "JetBrains Mono",
-    "IBM Plex Mono",
     "Consolas",
     "Cascadia Mono",
 ]
@@ -564,7 +580,7 @@ class SettingsWindow(QDialog):
         self.font_combo.blockSignals(True)
 
         env = _read_env()
-        loaded = env.get("APP_FONT") or "Fira Code"
+        loaded = env.get("APP_FONT") or "IBM Plex Mono"
         idx = self.font_combo.findText(loaded)
         if idx >= 0:
             self.font_combo.setCurrentIndex(idx)

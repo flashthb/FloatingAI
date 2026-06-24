@@ -4,7 +4,20 @@ Requiere variable de entorno GROQ_API_KEY con el token de
 https://console.groq.com
 """
 import os
+from openai import OpenAI
 from ai.catalog import provider_default_model
+
+_clients: dict[str, OpenAI] = {}
+
+
+def _get_client(api_key: str, base_url: str) -> OpenAI | None:
+    cache_key = f"{api_key}::{base_url}"
+    if cache_key not in _clients:
+        try:
+            _clients[cache_key] = OpenAI(api_key=api_key, base_url=base_url)
+        except Exception:
+            return None
+    return _clients[cache_key]
 
 
 def get_short_answer_groq(prompt: str, model: str | None = None, history: list[dict] | None = None) -> str | None:
@@ -12,10 +25,8 @@ def get_short_answer_groq(prompt: str, model: str | None = None, history: list[d
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         return None
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
-    except Exception:
+    client = _get_client(api_key, "https://api.groq.com/openai/v1")
+    if client is None:
         return None
 
     system = (
