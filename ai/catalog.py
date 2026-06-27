@@ -95,7 +95,7 @@ from pathlib import Path
 
 def _catalog_env_path() -> Path:
     if getattr(sys, 'frozen', False):
-        p = Path(os.environ.get("APPDATA", Path.home())) / "Flotante" / ".env"
+        p = Path(os.environ.get("APPDATA", Path.home())) / "FloatingAI" / ".env"
         p.parent.mkdir(parents=True, exist_ok=True)
         if not p.exists():
             bundled = Path(sys._MEIPASS) / '.env'

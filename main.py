@@ -11,13 +11,13 @@ from ui.launcher_window import LauncherWindow
 from ui.settings_window import SettingsWindow
 
 
-APP_NAME = "Flotante"
+APP_NAME = "FloatingAI"
 _lock_file = None
 
 
 def _acquire_lock() -> bool:
     global _lock_file
-    lock_path = Path(tempfile.gettempdir()) / "Flotante.lock"
+    lock_path = Path(tempfile.gettempdir()) / "FloatingAI.lock"
     def _process_exists(pid: int) -> bool:
         try:
             os.kill(pid, 0)
@@ -56,7 +56,7 @@ def _resource_path(relative: str) -> Path:
 
 def _env_file() -> Path:
     if getattr(sys, 'frozen', False):
-        p = Path(os.environ.get("APPDATA", Path.home())) / "Flotante" / ".env"
+        p = Path(os.environ.get("APPDATA", Path.home())) / "FloatingAI" / ".env"
         p.parent.mkdir(parents=True, exist_ok=True)
         if not p.exists():
             bundled = _resource_path('.env')

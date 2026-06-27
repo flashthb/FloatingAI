@@ -14,7 +14,7 @@ from ai.catalog import (
     provider_default_model, provider_models, provider_model_var,
 )
 
-ENV_PATH_HOME = Path(os.environ.get("APPDATA", Path.home())) / "Flotante" / ".env"
+ENV_PATH_HOME = Path(os.environ.get("APPDATA", Path.home())) / "FloatingAI" / ".env"
 
 
 def _env_path() -> Path:
@@ -28,7 +28,7 @@ def _env_path() -> Path:
     return Path(__file__).resolve().parent.parent / '.env'
 
 _AUTOSTART_REG_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
-_AUTOSTART_REG_NAME = "Flotante"
+_AUTOSTART_REG_NAME = "FloatingAI"
 
 
 def _autostart_command() -> str:
@@ -275,7 +275,7 @@ class SettingsWindow(QDialog):
         self.autostart_check.toggled.connect(self._on_autostart_toggled)
         layout.addWidget(self.autostart_check)
 
-        startup_hint = QLabel("Adds Flotante to Windows startup via registry.")
+        startup_hint = QLabel("Adds FloatingAI to Windows startup via registry.")
         startup_hint.setObjectName("hintLabel")
         layout.addWidget(startup_hint)
 
