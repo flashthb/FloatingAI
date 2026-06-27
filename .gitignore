@@ -6,4 +6,6 @@ dist/
 build/
 *.spec
 .agents/
+AGENTS.md
+skills-lock.json
 tools/
