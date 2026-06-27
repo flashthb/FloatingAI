@@ -134,7 +134,7 @@ class LauncherWindow(QWidget):
         self.show()
         self.raise_()
         self.activateWindow()
-        self.input.setFocus()
+        QTimer.singleShot(50, self.input.setFocus)
         self._fade_to(1.0, 150)
 
     def hide_and_clear(self):
