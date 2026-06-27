@@ -162,7 +162,6 @@ class LauncherWindow(QWidget):
         self.input.clear()
 
         if not any_key_configured():
-            self._history.pop()
             self.response.setPlainText(
                 "No hay claves de API configuradas.\n"
                 "Abre Settings → Añade una clave de API en la sección API."
