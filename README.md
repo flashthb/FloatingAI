@@ -37,12 +37,22 @@ Output: `dist\FloatingAI.exe`.
 ## Structure
 
 ```
-main.py                 Entry point, system tray, hotkey, fonts
-ui/                     launcher_window.py, settings_window.py
-ai/                     client.py, groq_backend.py, catalog.py, worker.py
-hotkeys/listener.py     Global hotkey wrapper
-config/settings.py      Constants
-assets/fonts/           Bundled .ttf fonts
+main.py              Entry point — system tray, hotkey, fonts
+ui/
+  launcher_window.py   Frameless input window (input + response)
+  settings_window.py   Settings dialog (Design + API tabs)
+ai/
+  client.py            AI dispatch — routes to active provider or fallback
+  groq_backend.py      Groq API client (OpenAI-compatible)
+  catalog.py           Provider/model registry and env helpers
+  worker.py            QRunnable for background AI calls
+  _util.py             Local simulator fallback
+hotkeys/
+  listener.py          Global hotkey (pynput wrapper)
+config/
+  settings.py          Constants (hotkey, window size, max chars)
+assets/
+  fonts/               Bundled .ttf files
 ```
 
 ## License
