@@ -49,7 +49,7 @@ def get_short_answer(prompt: str, model: Optional[str] = None, history: Optional
         return model or os.getenv(provider_model_var(provider_key)) or provider_default_model(provider_key)
 
     def _build_messages(history: list[dict]) -> list[dict]:
-        system = {"role": "system", "content": "Responde de forma muy breve y directa, máximo 3 líneas."}
+        system = {"role": "system", "content": "Respond in the same language as the user. Be very brief and direct, maximum 3 lines."}
         return [system] + history
 
     def _call_openai_like(base_url: str, api_key_env: str, model_id: str) -> Optional[str]:
@@ -61,7 +61,7 @@ def get_short_answer(prompt: str, model: Optional[str] = None, history: Optional
             return None
         try:
             messages = _build_messages(history) if history else [
-                {"role": "system", "content": "Responde de forma muy breve y directa, máximo 3 líneas."},
+                {"role": "system", "content": "Respond in the same language as the user. Be very brief and direct, maximum 3 lines."},
                 {"role": "user", "content": prompt},
             ]
             resp = client.chat.completions.create(
@@ -84,7 +84,7 @@ def get_short_answer(prompt: str, model: Optional[str] = None, history: Optional
             if history:
                 contents = [{"role": m["role"], "parts": [{"text": m["content"]}]} for m in history]
             else:
-                contents = [{"role": "user", "parts": [{"text": f"Responde breve y directo: {prompt}"}]}]
+                contents = [{"role": "user", "parts": [{"text": prompt}]}]
             payload = {
                 "contents": contents,
                 "generationConfig": {"maxOutputTokens": 150, "temperature": 0.3},
@@ -111,7 +111,7 @@ def get_short_answer(prompt: str, model: Optional[str] = None, history: Optional
             if history:
                 messages = [{"role": m["role"], "content": m["content"]} for m in history]
             else:
-                messages = [{"role": "user", "content": f"Responde breve y directo: {prompt}"}]
+                messages = [{"role": "user", "content": prompt}]
             payload = {
                 "model": model_id,
                 "max_tokens": 150,

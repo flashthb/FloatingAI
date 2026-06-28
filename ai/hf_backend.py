@@ -18,9 +18,7 @@ def get_short_answer_hf(prompt: str) -> str | None:
     url = f"https://api-inference.huggingface.co/models/{model}"
     headers = {"Authorization": f"Bearer {token}"}
     payload = {
-        "inputs": (
-            f"Responde en máximo 3 líneas, directo y sin explicaciones: {prompt}"
-        ),
+        "inputs": prompt,
         "parameters": {
             "max_new_tokens": 150,
             "temperature": 0.2,

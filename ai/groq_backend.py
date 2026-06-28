@@ -30,8 +30,8 @@ def get_short_answer_groq(prompt: str, model: str | None = None, history: list[d
         return None
 
     system = (
-        "Eres un asistente que responde de forma muy breve y directa. "
-        "Responde en un máximo de 3 líneas, sin explicaciones adicionales."
+        "Respond in the same language as the user. "
+        "Be very brief and direct, maximum 3 lines."
     )
     try:
         if history:
