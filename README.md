@@ -10,9 +10,9 @@ Built with PySide6, packaged with PyInstaller. The source is about 700 lines acr
 
 ## Screenshots
 
-![Input window](screenshots/1.png)
-![Settings — Design tab](screenshots/2.png)
-![Settings — API tab](screenshots/3.png)
+![Input window](screenshots/First.png)
+![Settings — Design tab](screenshots/Second.png)
+![Settings — API tab](screenshots/Third.png)
 
 ## Download
 
