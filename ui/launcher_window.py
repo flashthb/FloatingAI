@@ -38,7 +38,7 @@ class LauncherWindow(QWidget):
         self.container.setObjectName("container")
 
         self.input = QLineEdit()
-        self.input.setPlaceholderText("Pregunta...")
+        self.input.setPlaceholderText("Ask...")
         self.input.returnPressed.connect(self._on_enter)
 
         self.response = QTextEdit()
